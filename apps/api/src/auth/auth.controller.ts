@@ -7,6 +7,8 @@ import { DbService } from '../comun/db.service.js';
 import { COOKIE_SESION, limitar, Publico, Usuario, type Sesion } from '../comun/seguridad.js';
 import { config } from '../config.js';
 
+//COMMENTS
+
 class LoginDto {
   @IsEmail() @MaxLength(200) email: string;
   @IsString() @MinLength(8) @MaxLength(200) clave: string;

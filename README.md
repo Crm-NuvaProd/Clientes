@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # NuvaMail en la nube
 
 NuvaMail es una plataforma de correo masivo para NuvaProd. Incluye un editor visual de piezas, importación de piezas diseñadas por Claude, estadísticas al estilo Brevo con un veredicto de éxito por campaña, y entregabilidad cuidada de punta a punta.
@@ -114,3 +115,7 @@ apps/web/            Angular 22 (standalone, signals, OnPush, carga diferida, EC
 libs/contratos/      tipos compartidos API ↔ web
 docs/                formato de piezas para Claude
 ```
+=======
+# Clientes
+Crm NuvaProd
+>>>>>>> 8acc21ad80d3ca7de954d2594e03f71f0a150943

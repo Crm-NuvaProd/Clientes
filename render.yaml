@@ -1,0 +1,49 @@
+# Blueprint de Render: app (API + web) y PostgreSQL. Se crea con "New → Blueprint" apuntando a este repositorio.
+databases:
+  - name: nuvamail-db
+    databaseName: nuvamail
+    plan: basic-256mb
+    region: virginia
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: nuvamail
+    runtime: docker
+    plan: starter
+    region: virginia
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    preDeployCommand: node scripts/migrar.mjs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase: { name: nuvamail-db, property: connectionString }
+      - key: DATABASE_ADMIN_URL
+        fromDatabase: { name: nuvamail-db, property: connectionString }
+      - key: JWT_SECRET
+        generateValue: true
+      - key: UNSUB_SECRET
+        generateValue: true
+      - key: DRY_RUN
+        value: "true"            # cambiar a false cuando SES esté listo
+      - key: AWS_REGION
+        value: us-east-1
+      - key: SES_CONFIGURATION_SET
+        value: nuvamail
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: SNS_TOPIC_ARN
+        sync: false
+      # Primera empresa y usuario administrador (se crean solo si la base está vacía)
+      - key: SEMBRAR_EMPRESA
+        value: NuvaProd S.A.S.
+      - key: SEMBRAR_DOMINIO
+        value: mail.nuvaprod.com
+      - key: SEMBRAR_EMAIL
+        sync: false
+      - key: SEMBRAR_CLAVE
+        sync: false

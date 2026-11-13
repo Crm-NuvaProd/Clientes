@@ -1,0 +1,195 @@
+<header class="cabecera editor-barra">
+  <div class="fila">
+    <a routerLink="/plantillas" class="btn fantasma pequeno">← Diseños</a>
+    <input class="titulo-editable" [ngModel]="nombre()" (ngModelChange)="nombre.set($event); sucio.set(true)" aria-label="Nombre del diseño">
+    @if (origen() === 'claude') { <span class="pill claude">Pieza de Claude</span> }
+    @if (sucio()) { <span class="tenue">Cambios sin guardar</span> }
+  </div>
+  <div class="fila">
+    <div class="segmentado" role="tablist">
+      <button role="tab" [class.on]="modo() === 'editar'" (click)="modo.set('editar')">Editar</button>
+      <button role="tab" [class.on]="modo() === 'vista'" (click)="verVista()">Vista previa</button>
+    </div>
+    <button class="btn fantasma pequeno" (click)="deshacer()" title="Deshacer (Ctrl+Z)">↶ Deshacer</button>
+    <button class="btn fantasma" (click)="usarEnCampana()">Usar en campaña</button>
+    <button class="btn" [disabled]="guardando()" (click)="guardar()">{{ guardando() ? 'Guardando…' : 'Guardar' }}</button>
+  </div>
+</header>
+
+@if (diseno(); as d) {
+  @if (modo() === 'editar') {
+    <div class="editor">
+      <!-- Paleta -->
+      <aside class="paleta" aria-label="Bloques">
+        <h3>Bloques</h3>
+        <p class="tenue pequeno">Arrastre al correo o haga clic para agregar</p>
+        <div cdkDropList id="paleta" [cdkDropListConnectedTo]="['lienzo']" cdkDropListSortingDisabled [cdkDropListData]="paleta">
+          @for (p of paleta; track p.tipo) {
+            <button class="pieza" cdkDrag [cdkDragData]="p.tipo" (click)="agregar(p.tipo)" [title]="p.ayuda">
+              <span class="ico" aria-hidden="true">{{ p.ico }}</span>{{ p.nombre }}
+            </button>
+          }
+        </div>
+      </aside>
+
+      <!-- Lienzo -->
+      <section class="lienzo-fondo" [style.background]="d.ajustes.fondo" (click)="seleccion.set(null)">
+        <div class="lienzo" [style.width.px]="d.ajustes.ancho" [style.background]="d.ajustes.fondoContenido"
+             [style.fontFamily]="d.ajustes.fuente" [style.color]="d.ajustes.colorTexto"
+             cdkDropList id="lienzo" [cdkDropListData]="d.bloques" (cdkDropListDropped)="soltar($event)">
+          @for (b of d.bloques; track b.id) {
+            <div class="bloque" cdkDrag [class.sel]="seleccion() === b.id" (click)="$event.stopPropagation(); seleccion.set(b.id)"
+                 [style.background]="$any(b).fondo || null" [style.padding.px]="b.tipo === 'encabezado' || b.tipo === 'espaciador' ? 0 : ($any(b).padding ?? 16)">
+              <div class="bloque-placeholder" *cdkDragPlaceholder></div>
+              @if (seleccion() === b.id) {
+                <div class="herramientas" (click)="$event.stopPropagation()">
+                  <span class="tenue">{{ nombreTipo(b.tipo) }}</span>
+                  <button (click)="mover(b, -1)" aria-label="Subir">↑</button><button (click)="mover(b, 1)" aria-label="Bajar">↓</button>
+                  <button (click)="duplicar(b)" aria-label="Duplicar">⧉</button><button (click)="eliminar(b)" aria-label="Eliminar">✕</button>
+                  <span class="asa" cdkDragHandle aria-label="Arrastrar">⠿</span>
+                </div>
+              }
+              @switch (b.tipo) {
+                @case ('encabezado') {
+                  <div class="b-encabezado" [style.background]="$any(b).fondo" [style.color]="$any(b).color" [style.textAlign]="$any(b).alineacion">
+                    @if ($any(b).logoUrl) { <img [src]="$any(b).logoUrl" [alt]="$any(b).texto" [style.height.px]="$any(b).altoLogo ?? 44"> }
+                    @else { <b>{{ $any(b).texto }}</b> }
+                  </div>
+                }
+                @case ('texto') {
+                  @if (seleccion() === b.id) {
+                    <div class="mini-barra" (click)="$event.stopPropagation()">
+                      <button (mousedown)="$event.preventDefault(); formato('bold')"><b>B</b></button>
+                      <button (mousedown)="$event.preventDefault(); formato('italic')"><i>I</i></button>
+                      <button (mousedown)="$event.preventDefault(); formato('underline')"><u>U</u></button>
+                      <button (mousedown)="$event.preventDefault(); formato('insertUnorderedList')">• Lista</button>
+                      <button (mousedown)="$event.preventDefault(); formato('link')">🔗 Enlace</button>
+                      @for (v of variables; track v.v) { <button class="var" (mousedown)="$event.preventDefault(); formato('variable', v.v)">{{ v.t }}</button> }
+                    </div>
+                  }
+                  <div class="b-texto" contenteditable="true" [innerHTML]="$any(b).html" (blur)="textoEditado(b, $any($event.target))"
+                       [style.textAlign]="$any(b).alineacion" [style.fontSize.px]="$any(b).tamano" [style.color]="$any(b).color || null"></div>
+                }
+                @case ('imagen') {
+                  <div [style.textAlign]="$any(b).alineacion">
+                    @if ($any(b).src) { <img class="b-img" [src]="$any(b).src" [alt]="$any(b).alt" [style.width.%]="$any(b).ancho"> }
+                    @else { <div class="vacio">▣ Suba o elija una imagen en el panel derecho</div> }
+                  </div>
+                }
+                @case ('boton') {
+                  <div [style.textAlign]="$any(b).alineacion">
+                    <span class="b-boton" [style.background]="$any(b).colorFondo" [style.color]="$any(b).color" [style.borderRadius.px]="$any(b).radio">{{ $any(b).texto }}</span>
+                  </div>
+                }
+                @case ('columnas') {
+                  <div class="b-columnas" [class.invertir]="$any(b).invertir">
+                    <div>@if ($any(b).imagen?.src) { <img [src]="$any(b).imagen.src" [alt]="$any(b).imagen.alt"> } @else { <div class="vacio">▣ Imagen</div> }</div>
+                    <div class="b-texto" contenteditable="true" [innerHTML]="$any(b).html" (blur)="textoEditado(b, $any($event.target))"></div>
+                  </div>
+                }
+                @case ('divisor') { <hr [style.borderTopColor]="$any(b).color" [style.borderTopWidth.px]="$any(b).grosor"> }
+                @case ('espaciador') { <div class="b-espacio" [style.height.px]="$any(b).alto"></div> }
+                @case ('redes') {
+                  <div class="b-redes">@for (e of $any(b).enlaces; track $index) { <span class="red">{{ e.red }}</span> }</div>
+                }
+                @case ('html') {
+                  <iframe class="b-html" sandbox="" [srcdoc]="seguro($any(b).html)" title="Bloque HTML"></iframe>
+                }
+              }
+            </div>
+          } @empty {
+            <div class="vacio grande">Arrastre bloques aquí</div>
+          }
+        </div>
+        <p class="tenue pie-lienzo">El pie legal y el enlace de baja se agregan automáticamente al enviar.</p>
+      </section>
+
+      <!-- Propiedades -->
+      <aside class="propiedades" (click)="$event.stopPropagation()">
+        @if (bloqueSel(); as b) {
+          <h3>{{ nombreTipo(b.tipo) }}</h3>
+          @for (c of campos(); track c.k) {
+            <label [for]="'c-' + c.k">{{ c.t }}</label>
+            @switch (c.tipo) {
+              @case ('color') {
+                <div class="fila"><input type="color" [id]="'c-' + c.k" [ngModel]="valor(b, c.k) || '#ffffff'" (ngModelChange)="fijar(c.k, $event)">
+                  <input class="corto" [ngModel]="valor(b, c.k)" (change)="fijar(c.k, $any($event.target).value)" [attr.aria-label]="c.t"></div>
+              }
+              @case ('numero') { <input type="number" [id]="'c-' + c.k" [min]="c.min ?? null" [max]="c.max ?? null" [ngModel]="valor(b, c.k)" (change)="fijar(c.k, +$any($event.target).value)"> }
+              @case ('alinear') {
+                <div class="segmentado" [id]="'c-' + c.k">
+                  @for (a of alineaciones; track a.v) {
+                    <button [class.on]="valor(b, c.k) === a.v" (click)="fijar(c.k, a.v)">{{ a.t }}</button>
+                  }
+                </div>
+              }
+              @case ('check') { <input type="checkbox" [id]="'c-' + c.k" [ngModel]="valor(b, c.k)" (ngModelChange)="fijar(c.k, $event)"> }
+              @case ('area') { <textarea class="mono" rows="14" [id]="'c-' + c.k" [ngModel]="valor(b, c.k)" (change)="fijar(c.k, $any($event.target).value)"></textarea> }
+              @case ('imagen') {
+                @if (valor(b, c.k)) { <img class="miniatura" [src]="valor(b, c.k)" alt=""> }
+                <div class="fila">
+                  <label class="btn fantasma pequeno subir">Subir<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" (change)="subir($event, c.k)" hidden></label>
+                  <button class="btn fantasma pequeno" (click)="abrirBiblioteca(c.k)">Biblioteca</button>
+                </div>
+                <input [id]="'c-' + c.k" placeholder="o pegue una URL https://" [ngModel]="valor(b, c.k)" (change)="fijar(c.k, $any($event.target).value)">
+              }
+              @default { <input [type]="c.tipo === 'url' ? 'url' : 'text'" [id]="'c-' + c.k" [ngModel]="valor(b, c.k)" (change)="fijar(c.k, $any($event.target).value)"> }
+            }
+          }
+          @if (b.tipo === 'redes') {
+            @for (e of $any(b).enlaces; track $index; let i = $index) {
+              <div class="fila">
+                <select [ngModel]="e.red" (ngModelChange)="redFijar(i, 'red', $event)" aria-label="Red">@for (r of redes; track r) { <option [value]="r">{{ r }}</option> }</select>
+                <input [ngModel]="e.url" (change)="redFijar(i, 'url', $any($event.target).value)" aria-label="URL">
+                <button class="btn fantasma pequeno" (click)="redQuitar(i)" aria-label="Quitar">✕</button>
+              </div>
+            }
+            <button class="btn fantasma pequeno" (click)="redAgregar()">Agregar red</button>
+          }
+          @if (b.tipo === 'texto' || b.tipo === 'columnas') { <p class="tenue pequeno">Escriba directamente en el correo. Use la barra para negrita, enlaces y variables.</p> }
+        } @else {
+          <h3>Ajustes del correo</h3>
+          <label for="a-fondo">Fondo exterior</label><input id="a-fondo" type="color" [ngModel]="d.ajustes.fondo" (ngModelChange)="ajuste('fondo', $event)">
+          <label for="a-cont">Fondo del contenido</label><input id="a-cont" type="color" [ngModel]="d.ajustes.fondoContenido" (ngModelChange)="ajuste('fondoContenido', $event)">
+          <label for="a-texto">Color del texto</label><input id="a-texto" type="color" [ngModel]="d.ajustes.colorTexto" (ngModelChange)="ajuste('colorTexto', $event)">
+          <label for="a-enlace">Color de enlaces</label><input id="a-enlace" type="color" [ngModel]="d.ajustes.colorEnlace" (ngModelChange)="ajuste('colorEnlace', $event)">
+          <label for="a-ancho">Ancho (px)</label><input id="a-ancho" type="number" min="480" max="700" [ngModel]="d.ajustes.ancho" (change)="ajuste('ancho', +$any($event.target).value)">
+          <label for="a-fuente">Fuente</label>
+          <select id="a-fuente" [ngModel]="d.ajustes.fuente" (ngModelChange)="ajuste('fuente', $event)">
+            <option value="Poppins, Arial, Helvetica, sans-serif">Poppins (marca)</option>
+            <option value="Arial, Helvetica, sans-serif">Arial</option>
+            <option value="Georgia, 'Times New Roman', serif">Georgia</option>
+            <option value="Verdana, Geneva, sans-serif">Verdana</option>
+          </select>
+          <p class="tenue pequeno">Seleccione un bloque en el correo para editarlo.</p>
+        }
+      </aside>
+    </div>
+  } @else {
+    <div class="vista-previa">
+      <div class="fila centro">
+        <div class="segmentado">
+          <button [class.on]="dispositivo() === 'escritorio'" (click)="dispositivo.set('escritorio')">🖥 Escritorio</button>
+          <button [class.on]="dispositivo() === 'movil'" (click)="dispositivo.set('movil')">📱 Móvil</button>
+        </div>
+        <input class="medio" [(ngModel)]="preencabezado" (change)="verVista()" placeholder="Preencabezado (solo para la vista)" aria-label="Preencabezado">
+        <span class="tenue">{{ kb() }} KB {{ kb() > 95 ? '· Gmail lo recortará' : '' }}</span>
+      </div>
+      @if (vista(); as v) {
+        <iframe class="marco" [class.movil]="dispositivo() === 'movil'" sandbox="" [srcdoc]="v" title="Vista previa del correo"></iframe>
+      } @else { <p class="tenue centro">Generando vista previa…</p> }
+    </div>
+  }
+}
+
+@if (biblioteca(); as lista) {
+  <div class="modal-fondo" (click)="biblioteca.set(null)">
+    <div class="modal" (click)="$event.stopPropagation()" role="dialog" aria-label="Biblioteca de imágenes">
+      <header class="fila espacio"><h3>Biblioteca de imágenes</h3><button class="btn fantasma pequeno" (click)="biblioteca.set(null)">Cerrar</button></header>
+      <div class="galeria">
+        @for (a of lista; track a.id) { <button class="foto" (click)="elegir(a.url)"><img [src]="a.url" [alt]="a.nombre"><small>{{ a.nombre }}</small></button> }
+        @empty { <p class="tenue">Aún no ha subido imágenes.</p> }
+      </div>
+    </div>
+  </div>
+}

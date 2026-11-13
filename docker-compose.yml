@@ -1,0 +1,35 @@
+# Entorno local completo: PostgreSQL + NuvaMail en modo simulación.
+#   docker compose up -d --build
+#   docker compose run --rm migrar
+#   docker compose run --rm app node scripts/sembrar.mjs "NuvaProd S.A.S." admin@nuvaprod.com "Clave-Larga-2026" mail.nuvaprod.com
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: nuvamail_admin
+      POSTGRES_PASSWORD: nuvamail_admin
+      POSTGRES_DB: nuvamail
+    volumes: [pgdata:/var/lib/postgresql/data, ./infra/roles.sql:/docker-entrypoint-initdb.d/roles.sql:ro]
+    ports: ["5432:5432"]
+  migrar:
+    build: .
+    command: node scripts/migrar.mjs
+    environment:
+      DATABASE_ADMIN_URL: postgres://nuvamail_admin:nuvamail_admin@db/nuvamail
+    depends_on: [db]
+    profiles: [herramientas]
+  app:
+    build: .
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://nuvamail:nuvamail@db/nuvamail
+      DATABASE_ADMIN_URL: postgres://nuvamail_admin:nuvamail_admin@db/nuvamail
+      JWT_SECRET: cambie-esto-por-un-secreto-largo-de-48-caracteres-o-mas
+      UNSUB_SECRET: otro-secreto-largo-distinto-para-los-enlaces-de-baja
+      PUBLIC_URL: http://localhost:3000
+      WEB_ORIGIN: http://localhost:3000
+      DRY_RUN: "true"
+    ports: ["3000:3000"]
+    depends_on: [db]
+volumes:
+  pgdata:

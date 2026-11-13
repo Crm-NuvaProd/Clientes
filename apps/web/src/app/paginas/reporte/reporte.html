@@ -1,0 +1,128 @@
+@if (r(); as r) {
+  <header class="cabecera">
+    <div>
+      <a routerLink="/campanas" class="tenue pequeno">← Campañas</a>
+      <h1>{{ r.campana.nombre }} <span class="pill" [class]="r.campana.estado">{{ estados[r.campana.estado] }}</span></h1>
+      <p class="tenue">{{ r.campana.asunto }} · Inició {{ fecha(r.campana.iniciada) }}{{ r.campana.terminada ? ' · Terminó ' + fecha(r.campana.terminada) : '' }}</p>
+    </div>
+    <div class="fila">
+      @if (sesion.puede('admin','editor')) {
+        @if (['enviando','prueba_ab','programada'].includes(r.campana.estado)) { <button class="btn peligro" (click)="accion('pausar')">Pausar</button> }
+        @if (r.campana.estado === 'pausada') { <button class="btn" (click)="accion('reanudar')">Reanudar</button> }
+      }
+      <button class="btn fantasma" (click)="exportar()">Exportar CSV</button>
+    </div>
+  </header>
+
+  @if (r.campana.motivo_pausa && r.campana.estado === 'pausada') { <div class="salud mal"><b>Pausada:</b> <span>{{ r.campana.motivo_pausa }}</span></div> }
+  @if (r.kpis.enCola > 0) {
+    <section class="tarjeta">
+      <div class="fila espacio"><b>Progreso del envío</b><span class="tenue">{{ num(r.kpis.enviados) }} de {{ num(r.kpis.destinatarios) }} · {{ num(r.kpis.enCola) }} en cola</span></div>
+      <div class="barra"><i [style.width.%]="progreso() * 100"></i></div>
+      @if (r.campana.estado === 'prueba_ab') { <p class="tenue pequeno">Enviando la muestra A/B. El resto saldrá con el asunto ganador tras {{ r.campana.ab_horas }} h.</p> }
+    </section>
+  }
+
+  <nav class="pestanas" role="tablist">
+    @for (p of [['resumen','Resumen'],['entregabilidad','Entregabilidad'],['aperturas','Aperturas'],['clics','Clics']]; track p[0]) {
+      <button role="tab" [class.on]="pestana() === p[0]" (click)="pestana.set($any(p[0]))">{{ p[1] }}</button>
+    }
+    @if (r.ab) { <button role="tab" [class.on]="pestana() === 'ab'" (click)="pestana.set('ab')">Prueba A/B</button> }
+  </nav>
+
+  @switch (pestana()) {
+    @case ('resumen') {
+      <section class="veredicto" [class]="r.veredicto.nivel">
+        <div class="puntaje"><b>{{ r.veredicto.puntaje }}</b><small>/100</small></div>
+        <div>
+          <h2>{{ r.veredicto.titulo }}</h2>
+          <ul>@for (x of r.veredicto.recomendaciones; track x) { <li>{{ x }}</li> }</ul>
+          @if (r.comparacion.campanasComparadas) {
+            <p class="tenue pequeno">Promedio de sus últimas {{ r.comparacion.campanasComparadas }} campañas: apertura {{ pct(r.comparacion.promedioApertura) }}, clics {{ pct(r.comparacion.promedioClic) }}.</p>
+          }
+        </div>
+      </section>
+      <section class="kpis">
+        <div class="kpi"><small>Entregados</small><b>{{ pct(r.kpis.tasaEntrega) }}</b><span class="tenue">{{ num(r.kpis.entregados) }} de {{ num(r.kpis.enviados) }}</span></div>
+        <div class="kpi"><small>Apertura real</small><b>{{ pct(r.kpis.tasaAperturaSinMpp) }}</b><span class="tenue">{{ pct(r.kpis.tasaApertura) }} con Apple MPP</span></div>
+        <div class="kpi"><small>Clics (CTR)</small><b>{{ pct(r.kpis.tasaClic) }}</b><span class="tenue">{{ num(r.kpis.clicsUnicos) }} únicos · {{ num(r.kpis.clicsTotales) }} totales</span></div>
+        <div class="kpi"><small>Clic / apertura (CTOR)</small><b>{{ pct(r.kpis.ctor) }}</b></div>
+        <div class="kpi" [class.alerta]="r.kpis.tasaRebote > 0.02"><small>Rebote duro</small><b>{{ pct(r.kpis.tasaRebote, 2) }}</b><span class="tenue">{{ num(r.kpis.rebotesDuros) }} duros · {{ num(r.kpis.rebotesSuaves) }} temporales</span></div>
+        <div class="kpi" [class.alerta]="r.kpis.tasaQueja > 0.001"><small>Quejas (spam)</small><b>{{ pct(r.kpis.tasaQueja, 2) }}</b><span class="tenue">{{ num(r.kpis.quejas) }}</span></div>
+        <div class="kpi"><small>Bajas</small><b>{{ pct(r.kpis.tasaBaja, 2) }}</b><span class="tenue">{{ num(r.kpis.bajas) }}</span></div>
+        <div class="kpi"><small>Omitidos / fallidos</small><b>{{ num(r.kpis.omitidos + r.kpis.fallidos) }}</b><span class="tenue">suprimidos antes de enviar</span></div>
+      </section>
+      <div class="dos-col">
+        <section class="tarjeta"><h2>Embudo</h2><nm-grafico [opciones]="embudo()" [alto]="280" etiqueta="Embudo de la campaña" /></section>
+        <section class="tarjeta">
+          <h2>Indicadores frente a la referencia</h2>
+          <table>
+            <thead><tr><th>Indicador</th><th class="der">Valor</th><th class="der">Referencia</th><th></th></tr></thead>
+            <tbody>@for (i of r.veredicto.indicadores; track i.nombre) {
+              <tr><td>{{ i.nombre }}</td><td class="der"><b>{{ pct(i.valor, 2) }}</b></td><td class="der tenue">{{ i.referencia }}</td>
+                <td><span class="pill" [class]="i.estado">{{ {bien:'Bien', regular:'Regular', mal:'Mal'}[i.estado] }}</span></td></tr>
+            }</tbody>
+          </table>
+        </section>
+      </div>
+    }
+    @case ('entregabilidad') {
+      <div class="dos-col">
+        <section class="tarjeta"><h2>Por proveedor de correo</h2><nm-grafico [opciones]="dominios()" [alto]="300" etiqueta="Entrega y apertura por proveedor" /></section>
+        <section class="tarjeta">
+          <h2>Detalle por proveedor</h2>
+          <table>
+            <thead><tr><th>Proveedor</th><th class="der">Enviados</th><th class="der">Entregados</th><th class="der">Rebotes</th><th class="der">Aperturas</th></tr></thead>
+            <tbody>@for (d of r.porDominio; track d.dominio) {
+              <tr><td>{{ d.dominio }}</td><td class="der">{{ num(d.enviados) }}</td><td class="der">{{ num(d.entregados) }}</td>
+                <td class="der" [class.rojo]="d.enviados && d.rebotes / d.enviados > 0.02">{{ num(d.rebotes) }}</td><td class="der">{{ num(d.aperturas) }}</td></tr>
+            }</tbody>
+          </table>
+        </section>
+      </div>
+      <section class="tarjeta">
+        <h2>Motivos de rebote y rechazo</h2>
+        <table>
+          <thead><tr><th>Tipo</th><th>Motivo del servidor</th><th class="der">Cantidad</th></tr></thead>
+          <tbody>@for (m of r.motivosRebote; track $index) {
+            <tr><td><span class="pill" [class]="m.tipo === 'duro' ? 'mal' : 'regular'">{{ m.tipo === 'duro' ? 'Duro' : 'Temporal' }}</span></td><td class="mono pequeno">{{ m.motivo }}</td><td class="der">{{ num(m.cantidad) }}</td></tr>
+          } @empty { <tr><td colspan="3" class="tenue">Sin rebotes.</td></tr> }</tbody>
+        </table>
+        <p class="tenue pequeno">Los rebotes duros y los 3 rebotes temporales seguidos se suprimen solos para no volver a enviarles.</p>
+      </section>
+    }
+    @case ('aperturas') {
+      <section class="tarjeta"><h2>Aperturas y clics por hora</h2><nm-grafico [opciones]="lineaTiempo()" [alto]="300" etiqueta="Actividad por hora" /></section>
+      <div class="dos-col">
+        <section class="tarjeta"><h2>Dispositivo</h2><nm-grafico [opciones]="dispositivos()" [alto]="260" etiqueta="Aperturas por dispositivo" /></section>
+        <section class="tarjeta"><h2>Cliente de correo</h2><nm-grafico [opciones]="clientes()" [alto]="260" etiqueta="Aperturas por cliente de correo" /></section>
+      </div>
+      <p class="tenue pequeno">Apple Mail Privacy Protection abre automáticamente los correos: esas aperturas se muestran aparte y no cuentan como interacción.</p>
+    }
+    @case ('clics') {
+      <section class="tarjeta">
+        <h2>Enlaces</h2>
+        <table>
+          <thead><tr><th>Enlace</th><th class="der">Clics únicos</th><th class="der">Clics totales</th><th>Participación</th></tr></thead>
+          <tbody>@for (e of r.enlaces; track e.url) {
+            <tr><td><a [href]="e.url" target="_blank" rel="noopener noreferrer">{{ corto(e.url) }}</a></td><td class="der">{{ num(e.clicsUnicos) }}</td><td class="der">{{ num(e.clicsTotales) }}</td>
+              <td><div class="barra mini"><i [style.width.%]="r.kpis.clicsUnicos ? e.clicsUnicos / r.kpis.clicsUnicos * 100 : 0"></i></div></td></tr>
+          } @empty { <tr><td colspan="4" class="tenue">Aún no hay clics.</td></tr> }</tbody>
+        </table>
+      </section>
+    }
+    @case ('ab') {
+      <section class="tarjeta">
+        <h2>Prueba A/B del asunto</h2>
+        <table>
+          <thead><tr><th>Variante</th><th>Asunto</th><th class="der">Enviados</th><th class="der">Apertura real</th><th class="der">Clics</th></tr></thead>
+          <tbody>@for (v of r.ab; track v.variante) {
+            <tr [class.ganador]="r.campana.ab_ganador === v.variante"><td><b>{{ v.variante }}</b> @if (r.campana.ab_ganador === v.variante) { <span class="pill bien">Ganador</span> }</td>
+              <td>{{ v.asunto }}</td><td class="der">{{ num(v.enviados) }}</td><td class="der">{{ pct(v.enviados ? v.aperturas / v.enviados : 0) }}</td><td class="der">{{ pct(v.enviados ? v.clics / v.enviados : 0) }}</td></tr>
+          }</tbody>
+        </table>
+        <p class="tenue pequeno">Criterio: {{ r.campana.ab_criterio === 'clics' ? 'clics' : 'aperturas reales' }}. El ganador se elige {{ r.campana.ab_horas }} h después de enviar la muestra.</p>
+      </section>
+    }
+  }
+} @else { <p class="tenue">Cargando reporte…</p> }

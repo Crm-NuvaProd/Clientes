@@ -1,0 +1,13 @@
+{
+  "name": "nuvamail",
+  "private": true,
+  "description": "NuvaMail: correo masivo con editor de piezas, estadísticas y entregabilidad (Angular + NestJS + PostgreSQL + Amazon SES)",
+  "scripts": {
+    "instalar": "cd apps/api && npm ci --legacy-peer-deps && cd ../web && npm ci --legacy-peer-deps",
+    "migrar": "cd apps/api && node scripts/migrar.mjs",
+    "api": "cd apps/api && npm run start:dev",
+    "web": "cd apps/web && npx ng serve",
+    "probar": "cd apps/api && NODE_ENV=test npx vitest run",
+    "construir": "cd apps/web && npx ng build && cd ../api && npm run build"
+  }
+}
